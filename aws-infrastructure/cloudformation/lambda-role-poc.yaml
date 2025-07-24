@@ -1,0 +1,43 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: IAM Role for S3 Presigned URL PoC Lambda Function
+
+Parameters:
+  PoCBucketName:
+    Type: String
+    Description: Name of the S3 PoC bucket the Lambda function needs access to.
+
+Resources:
+  PoCLambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole # Allows logging to CloudWatch
+      Policies:
+        - PolicyName: S3PoCPresignedUrlAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                Resource:
+                  - !Sub "arn:aws:s3:::${PoCBucketName}"
+                  - !Sub "arn:aws:s3:::${PoCBucketName}/*" # All objects in the PoC bucket
+          Tags:
+            - Key: Project
+              Value: S3PresignedUrlPoC
+
+Outputs:
+  PoCLambdaRoleArn:
+    Description: ARN of the PoC Lambda Execution Role.
+    Value: !GetAtt PoCLambdaExecutionRole.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-PoCLambdaRoleArn"

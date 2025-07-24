@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Guide: Secure S3 File Transfer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Chosen Palette: Calm Tech -->
+    <!-- Application Structure Plan: The SPA is designed as an interactive, single-page dashboard. The Architecture Section now features a fully revised diagram showing the multi-bucket (Incoming, Trusted, Quarantine) flow with the File Processor and Auth Service. Clicking components scrolls to deep-dive sections. The Workflow Animation visually details Request-Upload, Direct Upload (with integrity check and conditional routing), and Download processes. This is more user-friendly than a linear document, allowing users to explore components in any order. The structure includes an interactive demo with two main parts: a "Request File Upload" form (simulated backend workflow initiation) and a "Generate Temporary Download Link" feature, providing a tangible feel for how presigned URLs work for both upload (to an Incoming bucket) and download (from a Trusted bucket), solidifying the user's understanding of the core concept. The workflow animation has been updated and debugged to reflect the full request-to-upload process, file processing, and ensure correct visual flow, including user authentication. -->
+    <!-- Visualization & Content Choices:
+        - Architecture Diagram: Extensively revised HTML/CSS layout to represent the complex multi-bucket, multi-lambda architecture visually. Goal: Organize/Inform. Interaction: Click to scroll.
+        - Component Features: Info cards with icons and text. Goal: Inform.
+        - Presigned URL Flow: Explained as process text. Goal: Explain a process.
+        - Logging Comparison: Two-column text. Goal: Compare.
+        - Workflow Animation: Updated to show "Request Upload" flow, "Direct Upload to Incoming S3", "File Processing" (including distinct steps for integrity check and conditional routing to Trusted/Quarantine), and "Download" flows. Debugged to ensure correct highlighting and indicator movement. Uses HTML/CSS for visual elements and JavaScript to sequence steps and animate data flow (e.g., highlighting paths, moving indicators). Goal: Explain a complex process visually, Engage/Teach.
+        - Interactive Demo: HTML forms and JavaScript for simulated request, direct upload, and download link generation. Goal: Engage/Teach.
+        - NO SVG/Mermaid used. No data charts are needed as the source material is conceptual.
+    -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8f7f4;
+            color: #4a4a4a;
+        }
+        .component {
+            transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+        }
+        .component:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.03);
+        }
+        .section-title {
+            border-bottom: 2px solid #e5e7eb;
+            padding-bottom: 0.5rem;
+        }
+        html {
+            scroll-behavior: smooth;
+        }
+
+        /* Animation specific styles */
+        .workflow-box {
+            border: 2px solid #cbd5e0;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            background-color: #f0f4f8;
+            font-weight: 600;
+            text-align: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 120px; /* Fixed height for boxes */
+            font-size: 0.9rem; /* Slightly smaller font for more content */
+        }
+        .workflow-step-description {
+            min-height: 40px; /* Ensure space for description */
+            text-align: center;
+            font-size: 0.9rem;
+            color: #64748b;
+        }
+        .arrow-path {
+            position: relative;
+            background-color: #d1d5db; /* Default grey */
+            height: 4px;
+            margin: 0.5rem 0;
+            border-radius: 2px;
+        }
+        .arrow-path-vertical {
+            width: 4px;
+            height: 80px; /* Adjust height as needed */
+            margin: 0 auto;
+            background-color: #d1d5db;
+        }
+        .arrow-path.active {
+            background-color: #4f46e5; /* Active indigo */
+            transition: background-color 0.3s ease-in-out;
+        }
+        .arrow-path-vertical.active {
+            background-color: #4f46e5;
+            transition: background-color 0.3s ease-in-out;
+        }
+        .data-indicator {
+            width: 20px;
+            height: 20px;
+            background-color: #ef4444; /* Red for data flow */
+            border-radius: 50%;
+            position: absolute;
+            top: -8px; /* Center vertically on the path */
+            left: 0;
+            opacity: 0;
+            transition: all 0.5s ease-in-out;
+        }
+        .data-indicator-vertical {
+            width: 20px;
+            height: 20px;
+            background-color: #10b981; /* Green for data flow */
+            border-radius: 50%;
+            position: absolute;
+            left: -8px; /* Center horizontally on the path */
+            top: 0;
+            opacity: 0;
+            transition: all 0.5s ease-in-out;
+        }
+        @keyframes pulse-once {
+            0% { transform: scale(1); box-shadow: 0 0 0 rgba(0,0,0,0); }
+            50% { transform: scale(1.02); box-shadow: 0 0 10px rgba(0,0,0,0.2); }
+            100% { transform: scale(1); box-shadow: 0 0 0 rgba(0,0,0,0); }
+        }
+        .animate-pulse-once {
+            animation: pulse-once 1s ease-out;
+        }
+    </style>
+</head>
+<body class="antialiased">
+
+    <header class="bg-white py-6 shadow-sm sticky top-0 z-50">
+        <div class="container mx-auto px-6 text-center">
+            <h1 class="text-3xl md:text-4xl font-bold text-gray-800">Interactive Guide to Secure S3 File Transfer</h1>
+            <p class="text-lg text-gray-500 mt-2">An explorable overview of AWS S3, temporary access, and logging.</p>
+        </div>
+    </header>
+
+    <main class="container mx-auto p-4 md:p-8">
+
+        <!-- Architecture Section -->
+        <section id="architecture" class="my-12">
+            <h2 class="text-2xl md:text-3xl font-bold text-center mb-4 text-gray-700 section-title">Solution Architecture</h2>
+            <p class="text-center text-gray-600 mb-8 max-w-3xl mx-auto">
+                This architecture provides secure, authenticated file transfer with integrity checking and robust logging. The user interacts via a frontend, which orchestrates backend services for presigned URL generation and file processing, ensuring sensitive credentials are never exposed. Click on any component to explore its role.
+            </p>
+            <div class="w-full max-w-5xl mx-auto p-4 md:p-8 bg-white rounded-xl shadow-md border border-gray-200">
+                <div class="grid grid-cols-1 md:grid-cols-5 gap-8 items-center text-center">
+                    <!-- Column 1: User & Frontend -->
+                    <div class="space-y-4 col-span-1">
+                        <div data-target="user-frontend-details" class="component cursor-pointer p-4 border-2 border-dashed border-blue-300 bg-blue-50 rounded-lg">
+                            <div class="text-4xl">👤</div>
+                            <h3 class="font-bold text-blue-800">User / Frontend App</h3>
+                            <p class="text-sm text-blue-600">Interface for requests & direct S3 I/O.</p>
+                        </div>
+                    </div>
+
+                    <!-- Column 2: Authentication -->
+                    <div class="space-y-4 col-span-1">
+                        <div class="flex justify-center items-center h-full">
+                            <div class="text-3xl text-gray-400 font-mono hidden md:block">→</div>
+                            <div class="text-3xl text-gray-400 font-mono md:hidden">↓</div>
+                        </div>
+                        <div data-target="backend-details" class="component cursor-pointer p-4 border-2 border-dashed border-blue-700 bg-blue-100 rounded-lg">
+                            <div class="text-4xl">🔐</div>
+                            <h3 class="font-bold text-blue-900">Auth Service / User DB</h3>
+                            <p class="text-sm text-blue-800">Validates user identity (e.g. X.509/CAC).</p>
+                        </div>
+                        <div class="flex justify-center items-center h-full">
+                            <div class="text-3xl text-gray-400 font-mono hidden md:block">→</div>
+                            <div class="text-3xl text-gray-400 font-mono md:hidden">↓</div>
+                        </div>
+                    </div>
+
+                    <!-- Column 3: Backend Services -->
+                    <div class="space-y-4 col-span-1">
+                        <div class="flex justify-center items-center h-full">
+                            <div class="text-3xl text-gray-400 font-mono hidden md:block">→</div>
+                            <div class="text-3xl text-gray-400 font-mono md:hidden">↓</div>
+                        </div>
+                        <div data-target="backend-details" class="component cursor-pointer p-4 border-2 border-dashed border-purple-300 bg-purple-50 rounded-lg">
+                            <div class="text-4xl">⚙️</div>
+                            <h3 class="font-bold text-purple-800">Backend (API Gateway/Lambda)</h3>
+                            <p class="text-sm text-purple-600">Handles authenticated requests, generates Presigned URLs.</p>
+                        </div>
+                        <div class="flex justify-center items-center h-full">
+                            <div class="text-3xl text-gray-400 font-mono hidden md:block">→</div>
+                            <div class="text-3xl text-gray-400 font-mono md:hidden">↓</div>
+                        </div>
+                    </div>
+
+                    <!-- Column 4: S3 Buckets & Processing -->
+                    <div class="space-y-4 col-span-1">
+                        <div class="flex justify-center items-center h-full">
+                            <div class="text-3xl text-gray-400 font-mono hidden md:block">→</div>
+                            <div class="text-3xl text-gray-400 font-mono md:hidden">↓</div>
+                        </div>
+                        <div data-target="s3-details" class="component cursor-pointer p-4 border-2 border-dashed border-green-300 bg-green-50 rounded-lg">
+                            <div class="text-4xl">📥</div>
+                            <h3 class="font-bold text-green-800">Incoming S3 Bucket</h3>
+                            <p class="text-sm text-green-600">Initial staging for uploads.</p>
+                        </div>
+                        <div class="flex justify-center items-center h-full">
+                            <div class="text-3xl text-gray-400 font-mono hidden md:block">→</div>
+                            <div class="text-3xl text-gray-400 font-mono md:hidden">↓</div>
+                        </div>
+                        <div data-target="backend-details" class="component cursor-pointer p-4 border-2 border-dashed border-orange-600 bg-orange-100 rounded-lg">
+                            <div class="text-4xl">🔍</div>
+                            <h3 class="font-bold text-orange-800">File Processor (Lambda)</h3>
+                            <p class="text-sm text-orange-600">Performs integrity & security checks.</p>
+                        </div>
+                        <div class="flex justify-center items-center h-full">
+                            <div class="text-3xl text-gray-400 font-mono hidden md:block">→</div>
+                            <div class="text-3xl text-gray-400 font-mono md:hidden">↓</div>
+                        </div>
+                        <div data-target="s3-details" class="component cursor-pointer p-4 border-2 border-dashed border-lime-600 bg-lime-100 rounded-lg">
+                            <div class="text-4xl">✅</div>
+                            <h3 class="font-bold text-lime-800">Trusted S3 Bucket</h3>
+                            <p class="text-sm text-lime-600">Secure storage for validated files.</p>
+                        </div>
+                         <div data-target="s3-details" class="component cursor-pointer p-4 border-2 border-dashed border-rose-600 bg-rose-100 rounded-lg mt-4">
+                            <div class="text-4xl">🚫</div>
+                            <h3 class="font-bold text-rose-800">Quarantine S3 Bucket</h3>
+                            <p class="text-sm text-rose-600">Holds failed/malicious files.</p>
+                        </div>
+                    </div>
+
+                    <!-- Column 5: Logging (Simplified for visual flow) -->
+                    <div class="space-y-4 col-span-1">
+                        <div class="flex justify-center items-center h-full">
+                            <div class="text-3xl text-gray-400 font-mono hidden md:block">→</div>
+                            <div class="text-3xl text-gray-400 font-mono md:hidden">↓</div>
+                        </div>
+                        <div data-target="logging-details" class="component cursor-pointer p-4 border-2 border-dashed border-yellow-300 bg-yellow-50 rounded-lg" style="height: calc(100% - 16px - 1.5rem*2 - 8px*2);"> <!-- Adjust height to fill column -->
+                            <div class="text-4xl">📝</div>
+                            <h3 class="font-bold text-yellow-800">Logging Services</h3>
+                            <p class="text-sm text-yellow-600">CloudTrail & S3 Access Logs (Passive across all steps).</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Workflow Animation Section -->
+        <section id="workflow-animation" class="my-16 p-8 bg-white rounded-xl shadow-md border border-gray-200">
+            <h2 class="text-2xl md:text-3xl font-bold text-center mb-4 text-gray-700 section-title">Secure Transfer Workflow</h2>
+            <p class="text-center text-gray-600 mb-8 max-w-3xl mx-auto">
+                This animation visualizes the step-by-step process of both requesting/uploading and downloading files securely using presigned URLs and backend processing. Follow the flow to understand how data and requests move through the system, ensuring security and temporary access.
+            </p>
+
+            <div class="flex justify-center mb-8 space-x-4">
+                <button id="start-request-upload-animation" class="bg-blue-600 text-white py-2 px-4 rounded-lg font-semibold hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition duration-150 ease-in-out">
+                    Start Request-Upload Workflow
+                </button>
+                <button id="start-direct-upload-animation" class="bg-indigo-600 text-white py-2 px-4 rounded-lg font-semibold hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition duration-150 ease-in-out">
+                    Start Direct-Upload Workflow
+                </button>
+                <button id="start-download-animation" class="bg-purple-600 text-white py-2 px-4 rounded-lg font-semibold hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition duration-150 ease-in-out">
+                    Start Download Workflow
+                </button>
+                <button id="reset-animation" class="bg-gray-500 text-white py-2 px-4 rounded-lg font-semibold hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 transition duration-150 ease-in-out">
+                    Reset
+                </button>
+            </div>
+
+            <div class="grid grid-cols-5 items-start gap-4">
+                <!-- User/Frontend Column -->
+                <div class="flex flex-col items-center col-span-1">
+                    <div id="user-frontend-node" class="workflow-box text-blue-800">👤 User / Frontend</div>
+                    <div id="step-desc-0" class="workflow-step-description mt-2"></div>
+                </div>
+
+                <!-- Auth Column -->
+                <div class="flex flex-col items-center col-span-1">
+                    <div id="auth-service-node" class="workflow-box text-blue-700">🔐 Auth Service / User DB</div>
+                    <div id="auth-backend-arrow" class="arrow-path-vertical h-20 relative">
+                        <div id="auth-backend-indicator" class="data-indicator-vertical" style="top: 0; background-color: #6366f1;"></div>
+                    </div>
+                    <div id="step-desc-auth" class="workflow-step-description mt-2"></div>
+                </div>
+
+                <!-- Backend Column -->
+                <div class="flex flex-col items-center col-span-1">
+                    <div id="backend-node" class="workflow-box text-purple-800">⚙️ Backend (API Gateway/Lambda)</div>
+                    <div id="backend-s3-arrow-1" class="arrow-path-vertical h-20 relative">
+                        <div id="backend-s3-indicator-1" class="data-indicator-vertical" style="top: 0;"></div>
+                    </div>
+                    <div id="step-desc-1" class="workflow-step-description"></div>
+                    <div id="backend-s3-arrow-2" class="arrow-path-vertical h-20 relative">
+                        <div id="backend-s3-indicator-2" class="data-indicator-vertical" style="top: 0;"></div>
+                    </div>
+                    <div id="step-desc-2" class="workflow-step-description"></div>
+                    <div id="step-desc-3" class="workflow-step-description"></div>
+                </div>
+
+                <!-- S3 & Processor Columns -->
+                <div class="flex flex-col items-center col-span-1">
+                    <div class="h-[120px]"></div> <!-- Placeholder for auth-service-node -->
+                    <div class="h-[80px]"></div> <!-- Placeholder for auth-backend-arrow -->
+                    <div id="incoming-s3-node" class="workflow-box text-green-800">📥 Incoming S3 Bucket</div>
+                    <div id="incoming-processor-arrow" class="arrow-path-vertical h-20 relative">
+                        <div id="incoming-processor-indicator" class="data-indicator-vertical" style="top: 0; background-color: #6d28d9;"></div>
+                    </div>
+                    <div id="step-desc-s3-process-trigger" class="workflow-step-description"></div>
+                    <div id="processor-node" class="workflow-box text-orange-600">🔍 File Processor (Lambda)</div>
+                    <div id="processor-s3-arrow-trusted" class="arrow-path-vertical h-20 relative">
+                        <div id="processor-s3-indicator-trusted" class="data-indicator-vertical" style="top: 0; background-color: #10b981;"></div>
+                    </div>
+                    <div id="processor-s3-arrow-quarantine" class="arrow-path-vertical h-20 relative">
+                        <div id="processor-s3-indicator-quarantine" class="data-indicator-vertical" style="top: 0; background-color: #ef4444;"></div>
+                    </div>
+                    <div id="step-desc-4" class="workflow-step-description mt-2"></div>
+                </div>
+
+                <!-- Trusted/Quarantine S3 Buckets -->
+                <div class="flex flex-col items-center col-span-1">
+                    <div class="h-[120px]"></div> <!-- Placeholder -->
+                    <div class="h-[80px]"></div> <!-- Placeholder for auth-backend-arrow -->
+                    <div class="h-[120px]"></div> <!-- Placeholder for incoming-s3-node -->
+                    <div class="h-[80px]"></div> <!-- Placeholder for incoming-processor-arrow -->
+                    <div class="h-[120px]"></div> <!-- Placeholder for processor-node -->
+                    <div id="trusted-s3-node" class="workflow-box text-lime-600">✅ Trusted S3 Bucket</div>
+                    <div id="quarantine-s3-node" class="workflow-box text-rose-600">🚫 Quarantine S3 Bucket</div>
+                </div>
+            </div>
+            <div class="text-center text-gray-500 text-sm mt-8">All steps are logged passively by CloudTrail and S3 Access Logs.</div>
+        </section>
+
+
+        <!-- Deep Dive Sections -->
+        <div class="space-y-16">
+            <section id="user-frontend-details" class="p-8 bg-white rounded-xl shadow-md border border-gray-200">
+                <h2 class="text-2xl font-bold text-blue-800 mb-4 section-title">👤 The User & Frontend</h2>
+                <p class="text-gray-600 mb-6">The frontend is the user-facing part of the system, running in the browser. Its primary security role is to **never handle permanent AWS credentials**. Instead, it performs authenticated interactions with a trusted backend to orchestrate secure file operations.</p>
+                <div class="grid md:grid-cols-2 gap-6">
+                    <div class="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                        <h3 class="font-semibold text-lg text-blue-700 mb-2">Upload Process</h3>
+                        <ol class="list-decimal list-inside space-y-2 text-gray-700">
+                            <li>**Authenticate:** User's browser presents client certificate (e.g., from CAC card) to API Gateway.</li>
+                            <li>Frontend requests a secure **upload link** from the authenticated backend.</li>
+                            <li>Backend returns a temporary, one-time-use Presigned URL for the Incoming S3 Bucket.</li>
+                            <li>Frontend uploads the file directly to Incoming S3 using this URL.</li>
+                        </ol>
+                    </div>
+                    <div class="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                        <h3 class="font-semibold text-lg text-blue-700 mb-2">Download Process</h3>
+                        <ol class="list-decimal list-inside space-y-2 text-gray-700">
+                            <li>**Authenticate:** User's browser presents client certificate (e.g., from CAC card) to API Gateway.</li>
+                            <li>Frontend requests a secure **download link** from the authenticated backend.</li>
+                            <li>Backend returns a temporary, short-lived Presigned URL for the Trusted S3 Bucket.</li>
+                            <li>Browser uses the URL to download the file directly from Trusted S3.</li>
+                        </ol>
+                    </div>
+                </div>
+            </section>
+            
+            <section id="backend-details" class="p-8 bg-white rounded-xl shadow-md border border-gray-200">
+                <h2 class="text-2xl font-bold text-purple-800 mb-4 section-title">⚙️ The Backend Gatekeeper</h2>
+                 <p class="text-gray-600 mb-6">The backend, composed of API Gateway and AWS Lambda, acts as a trusted gatekeeper. It is the only part of the system (besides administrators) with permissions to interact with S3 directly. Its sole purpose in this context is to validate authenticated requests and generate temporary, single-use Presigned URLs.</p>
+                <div class="bg-purple-50 p-6 rounded-lg border border-purple-200">
+                    <h3 class="font-semibold text-lg text-purple-700 mb-2">Key Responsibilities</h3>
+                    <ul class="list-disc list-inside space-y-2 text-gray-700">
+                        <li><b>Authentication & Authorization:</b> (Via Custom Authorizer Lambda) Verifies the user's identity (e.g., from CAC card certificate) and checks if they are an approved user with appropriate permissions.</li>
+                        <li><b>Generate Presigned URLs:</b> Uses its IAM Role to ask S3 for a temporary URL for a specific action (`getObject` or `putObject`).</li>
+                        <li><b>Enforce Security Policy:</b> Can add further conditions, like limiting file sizes or types, before generating a URL.</li>
+                        <li><b>Audit Trail:</b> All actions taken by the Lambda function are logged in CloudTrail, providing a clear record of who requested access to what, and when.</li>
+                    </ul>
+                </div>
+            </section>
+
+            <section id="s3-details" class="p-8 bg-white rounded-xl shadow-md border border-gray-200">
+                <h2 class="text-2xl font-bold text-green-800 mb-4 section-title">🗄️ Secure S3 Storage</h2>
+                <p class="text-gray-600 mb-6">The S3 bucket is the foundation of the storage system, configured with multiple layers of security to protect data at rest and control access. This architecture uses dedicated buckets for each stage of the file lifecycle.</p>
+                <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div class="bg-green-50 p-4 rounded-lg border border-green-200">
+                        <h3 class="font-semibold text-lg text-green-700 mb-2">Incoming Bucket</h3>
+                        <p class="text-gray-700">Files are initially uploaded here via presigned URLs. This acts as a staging area before security checks.</p>
+                    </div>
+                    <div class="bg-lime-500 p-4 rounded-lg border border-lime-600">
+                        <h3 class="font-semibold text-lg text-lime-700 mb-2">Trusted Bucket</h3>
+                        <p class="text-gray-700">Files that pass all integrity and security checks are moved here. This is the source for approved downloads.</p>
+                    </div>
+                    <div class="bg-rose-500 p-4 rounded-lg border border-rose-600">
+                        <h3 class="font-semibold text-lg text-rose-700 mb-2">Quarantine Bucket</h3>
+                        <p class="text-gray-700">Files that fail integrity or security checks are moved to this isolated bucket for further investigation.</p>
+                    </div>
+                    <div class="bg-green-50 p-4 rounded-lg border border-green-200">
+                        <h3 class="font-semibold text-lg text-green-700 mb-2">Block Public Access</h3>
+                        <p class="text-gray-700">This is **ON** by default for ALL buckets. It ensures no file can be made public by mistake through bucket policies or ACLs.</p>
+                    </div>
+                    <div class="bg-green-50 p-4 rounded-lg border border-green-200">
+                        <h3 class="font-semibold text-lg text-green-700 mb-2">Server-Side Encryption (SSE-KMS)</h3>
+                        <p class="text-gray-700">Files are automatically encrypted the moment they are written to the disk in S3. AWS manages the encryption keys, providing seamless data protection at rest.</p>
+                    </div>
+                    <div class="bg-green-50 p-4 rounded-lg border border-green-200">
+                        <h3 class="font-semibold text-lg text-green-700 mb-2">Bucket Versioning</h3>
+                        <p class="text-gray-700">Enabled for all buckets to protect against accidental overwrites or deletions. Every version of a file is preserved, allowing for easy recovery.</p>
+                    </div>
+                </div>
+            </section>
+            
+            <section id="logging-details" class="p-8 bg-white rounded-xl shadow-md border border-gray-200">
+                <h2 class="text-2xl font-bold text-yellow-800 mb-4 section-title">📝 Comprehensive Logging</h2>
+                 <p class="text-gray-600 mb-6">Visibility is key to security. Two distinct types of logging work together to provide a complete picture of all activity related to your S3 bucket.</p>
+                 <div class="grid md:grid-cols-2 gap-8">
+                     <div class="bg-yellow-50 p-6 rounded-lg border border-yellow-200">
+                         <h3 class="font-semibold text-lg text-yellow-700 mb-2">AWS CloudTrail (The "Who" and "What")</h3>
+                         <p class="text-gray-700 mb-4">Tracks all API calls made to your AWS account.</p>
+                         <ul class="list-disc list-inside space-y-2 text-gray-700">
+                            <li><b>Answers:</b> Who generated a presigned URL? When was a bucket policy changed?</li>
+                            <li><b>Scope:</b> Account-wide API activity.</li>
+                             <li><b>Key Insight:</b> Audits administrative actions and backend requests for temporary access.</li>
+                         </ul>
+                     </div>
+                     <div class="bg-yellow-50 p-6 rounded-lg border border-yellow-200">
+                         <h3 class="font-semibold text-lg text-yellow-700 mb-2">S3 Server Access Logs (The "How" and "Where from")</h3>
+                         <p class="text-gray-700 mb-4">Records every direct request made to your S3 bucket.</p>
+                         <ul class="list-disc list-inside space-y-2 text-gray-700">
+                            <li><b>Answers:</b> Which IP address downloaded the file using a presigned URL? Was the request successful?</li>
+                            <li><b>Scope:</b> Bucket-specific HTTP requests.</li>
+                             <li><b>Key Insight:</b> Provides a raw, detailed log of every file access, successful or not.</li>
+                         </ul>
+                     </div>
+                 </div>
+            </section>
+        </div>
+
+        <!-- Interactive Demo Section -->
+        <section id="demo" class="my-16">
+            <h2 class="text-2xl md:text-3xl font-bold text-center mb-4 text-gray-700 section-title">Interactive Demo</h2>
+            <p class="text-center text-gray-600 mb-8 max-w-3xl mx-auto">
+                Experience secure file transfer. Select a file to upload or generate a temporary download link for an existing mock file. This demonstrates how the frontend interacts with the backend to obtain time-limited S3 access without exposing credentials.
+            </p>
+            <div class="w-full max-w-2xl mx-auto p-8 bg-white rounded-xl shadow-lg border border-gray-200">
+                
+                <!-- Request File Upload Sub-section -->
+                <div class="mb-8 p-6 border border-teal-200 rounded-lg bg-teal-50">
+                    <h3 class="text-xl font-semibold text-teal-800 mb-4">Request File Upload</h3>
+                    <p class="text-gray-700 text-sm mb-4">
+                        Simulate requesting an upload link. Fill in your details and the type of file you need to send. This information would typically trigger a backend workflow to generate a personalized presigned URL and send it to your email.
+                    </p>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <div>
+                            <label for="first-name" class="block text-sm font-medium text-gray-700">First Name</label>
+                            <input type="text" id="first-name" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-teal-500 focus:ring-teal-500 sm:text-sm p-2" placeholder="John">
+                        </div>
+                        <div>
+                            <label for="last-name" class="block text-sm font-medium text-gray-700">Last Name</label>
+                            <input type="text" id="last-name" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-teal-500 focus:ring-teal-500 sm:text-sm p-2" placeholder="Doe">
+                        </div>
+                        <div class="md:col-span-2">
+                            <label for="email" class="block text-sm font-medium text-gray-700">Email</label>
+                            <input type="email" id="email" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-teal-500 focus:ring-teal-500 sm:text-sm p-2" placeholder="john.doe@example.com">
+                        </div>
+                        <div class="md:col-span-2">
+                            <label for="department" class="block text-sm font-medium text-gray-700">Department</label>
+                            <input type="text" id="department" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-teal-500 focus:ring-teal-500 sm:text-sm p-2" placeholder="Sales">
+                        </div>
+                        <div class="col-span-1 md:col-span-2">
+                            <label for="upload-category" class="block text-sm font-medium text-gray-700">Upload Category</label>
+                            <select id="upload-category" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-teal-500 focus:ring-teal-500 sm:text-sm p-2">
+                                <option value="">Select a category</option>
+                                <option value="Part Request">Part Request</option>
+                                <option value="Part Estimate">Part Estimate</option>
+                                <option value="Invoice">Invoice</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button id="submit-upload-request-btn" class="w-full bg-teal-600 text-white py-3 px-4 rounded-lg font-semibold hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 transition duration-150 ease-in-out">
+                        Submit Upload Request
+                    </button>
+                    <p id="request-status-message" class="text-center text-sm mt-3 text-gray-700"></p>
+                </div>
+
+                <!-- File Upload Sub-section (existing) -->
+                <div class="mb-8 p-6 border border-blue-200 rounded-lg bg-blue-50">
+                    <h3 class="text-xl font-semibold text-blue-800 mb-4">Direct File Upload (using issued link)</h3>
+                    <p class="text-gray-700 text-sm mb-4">
+                        Once you receive a presigned upload link (conceptually, via email after requesting), you would use it here to directly upload your file to the Incoming S3 bucket.
+                    </p>
+                    <input type="file" id="upload-file-input" class="block w-full text-sm text-gray-500
+                               file:mr-4 file:py-2 file:px-4
+                               file:rounded-full file:border-0
+                               file:text-sm file:font-semibold
+                               file:bg-blue-50 file:text-blue-700
+                               hover:file:bg-blue-100 mb-4" />
+                    <button id="upload-file-btn" class="w-full bg-blue-600 text-white py-3 px-4 rounded-lg font-semibold hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition duration-150 ease-in-out">
+                        Upload File to S3
+                    </button>
+                    <p id="upload-status-message" class="text-center text-sm mt-3 text-gray-700"></p>
+                </div>
+
+                <!-- Generate Download Link Sub-section (existing) -->
+                <div class="p-6 border border-purple-200 rounded-lg bg-purple-50">
+                    <h3 class="text-xl font-semibold text-purple-800 mb-4">Get Temporary Download Link</h3>
+                    <label for="download-file-select" class="block text-sm font-medium text-gray-700 mb-1">Select Mock File for Download:</label>
+                    <select id="download-file-select" class="block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                        <option value="hkmux/summary_report.pdf">hkmux/summary_report.pdf</option>
+                        <option value="security/disa_stig_summary.html">security/disa_stig_summary.html</option>
+                        <option value="customer/part_request_form.docx">customer/part_request_form.docx</option>
+                    </select>
+                    <button id="generate-link-btn" class="w-full bg-purple-600 text-white py-3 px-4 rounded-lg font-semibold hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition duration-150 ease-in-out mt-4">
+                        Generate Temporary Download Link
+                    </button>
+                </div>
+
+                <div id="demo-output" class="mt-6 p-4 bg-gray-50 rounded-lg bor

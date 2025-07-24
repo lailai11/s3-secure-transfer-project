@@ -1,0 +1,97 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: AWS API Gateway for S3 Presigned URL PoC Lambda Function
+
+Parameters:
+  PoCLambdaFunctionArn:
+    Type: String
+    Description: ARN of the PoC Lambda function to integrate with.
+
+Resources:
+  PoCApiGatewayRestApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: PoCS3PresignedUrlApi # Unique API name for PoC
+      Description: API for generating S3 presigned URLs for PoC.
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+
+      PoCApiGatewayResource:
+        Type: AWS::ApiGateway::Resource
+        Properties:
+          ParentId: !GetAtt PoCApiGatewayRestApi.RootResourceId
+          PathPart: presigned-url
+          RestApiId: !Ref PoCApiGatewayRestApi
+
+      PoCApiGatewayMethod:
+        Type: AWS::ApiGateway::Method
+        Properties:
+          HttpMethod: GET
+          ResourceId: !Ref PoCApiGatewayResource
+          RestApiId: !Ref PoCApiGatewayRestApi
+          AuthorizationType: NONE # No authorization for simple PoC
+          Integration:
+            Type: AWS_PROXY
+            IntegrationHttpMethod: POST
+            Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PoCLambdaFunctionArn}/invocations"
+          RequestParameters:
+            method.request.querystring.key: true
+            method.request.querystring.action: false # Optional action
+            method.request.querystring.contentType: false # Optional contentType
+
+      PoCLambdaPermission:
+        Type: AWS::Lambda::Permission
+        Properties:
+          Action: lambda:InvokeFunction
+          FunctionName: !Ref PoCLambdaFunctionArn
+          Principal: apigateway.amazonaws.com
+          SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PoCApiGatewayRestApi.RestApiId}/*/*"
+
+      PoCApiGatewayDeployment:
+        Type: AWS::ApiGateway::Deployment
+        DependsOn: PoCApiGatewayMethod
+        Properties:
+          RestApiId: !Ref PoCApiGatewayRestApi
+          Description: Initial PoC deployment.
+
+      PoCApiGatewayStage:
+        Type: AWS::ApiGateway::Stage
+        Properties:
+          StageName: poc # PoC stage name
+          RestApiId: !Ref PoCApiGatewayRestApi
+          DeploymentId: !Ref PoCApiGatewayDeployment
+
+      # CORS for PoC (allow all origins for easy testing)
+      PoCApiGatewayCorsMethodOptions:
+        Type: AWS::ApiGateway::Method
+        Properties:
+          HttpMethod: OPTIONS
+          ResourceId: !Ref PoCApiGatewayResource
+          RestApiId: !Ref PoCApiGatewayRestApi
+          AuthorizationType: NONE
+          Integration:
+            Type: MOCK
+            RequestTemplates:
+              application/json: "{\"statusCode\": 200}"
+            IntegrationResponses:
+              - StatusCode: 200
+                ResponseParameters:
+                  method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,content-type'"
+                  method.response.header.Access-Control-Allow-Methods: "'GET,PUT,OPTIONS'"
+                  method.response.header.Access-Control-Allow-Origin: "'*'" # Allowing all origins for simple PoC
+                ResponseTemplates:
+                  application/json: "null"
+                SelectionPattern: ""
+          MethodResponses:
+            - StatusCode: 200
+              ResponseParameters:
+                method.response.header.Access-Control-Allow-Headers: true
+                method.response.header.Access-Control-Allow-Methods: true
+                method.response.header.Access-Control-Allow-Origin: true
+
+Outputs:
+  PoCApiGatewayInvokeUrl:
+    Description: Invoke URL of the PoC API Gateway endpoint.
+    Value: !Sub "https://${PoCApiGatewayRestApi.RestApiId}.execute-api.${AWS::Region}.amazonaws.com/${PoCApiGatewayStage.StageName}"
+    Export:
+      Name: !Sub "${AWS::StackName}-PoCApiGatewayInvokeUrl"

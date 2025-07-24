@@ -1,0 +1,28 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: S3 Bucket for Presigned URL PoC Testing
+
+Parameters:
+  PoCBucketName:
+    Type: String
+    Description: Name for the S3 bucket to use for PoC testing. Must be globally unique.
+
+Resources:
+  PoCBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref PoCBucketName
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Project
+          Value: S3PresignedUrlPoC
+
+Outputs:
+  PoCBucketNameOutput:
+    Description: Name of the PoC S3 Bucket.
+    Value: !Ref PoCBucketName
+    Export:
+      Name: !Sub "${AWS::StackName}-PoCBucketName"

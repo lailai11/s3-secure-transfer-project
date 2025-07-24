@@ -1,0 +1,43 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: AWS Lambda Function for S3 Presigned URL PoC Generation
+
+Parameters:
+  PoCLambdaRoleArn:
+    Type: String
+    Description: ARN of the PoC Lambda function.
+  PoCBucketName:
+    Type: String
+    Description: Name of the PoC S3 bucket the Lambda function will interact with (for environment variable).
+  LambdaCodeS3Bucket:
+    Type: String
+    Description: S3 bucket where the Lambda deployment package (zip file) is located.
+  LambdaCodeS3Key:
+    Type: String
+    Description: S3 key (path/filename) of the Lambda deployment package (zip file).
+
+Resources:
+  PoCS3PresignedUrlGenerator:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: PoCS3PresignedUrlGenerator # Unique function name for PoC
+      Handler: index.handler
+      Runtime: nodejs20.x
+      Role: !Ref PoCLambdaRoleArn
+      Timeout: 30 # seconds
+      MemorySize: 128 # MB
+      Code:
+        S3Bucket: !Ref LambdaCodeS3Bucket # S3 bucket for your zipped Lambda code
+        S3Key: !Ref LambdaCodeS3Key # S3 key (path/filename) of your zipped Lambda code
+      Environment:
+        Variables:
+          S3_BUCKET_NAME: !Ref PoCBucketName
+      Tags:
+        - Key: Project
+          Value: S3PresignedUrlPoC
+
+Outputs:
+  PoCLambdaFunctionArn:
+    Description: ARN of the PoC Lambda function.
+    Value: !GetAtt PoCS3PresignedUrlGenerator.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-PoCLambdaFunctionArn"
