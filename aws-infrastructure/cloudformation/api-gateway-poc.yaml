@@ -16,78 +16,78 @@ Resources:
         Types:
           - REGIONAL
 
-      PoCApiGatewayResource:
-        Type: AWS::ApiGateway::Resource
-        Properties:
-          ParentId: !GetAtt PoCApiGatewayRestApi.RootResourceId
-          PathPart: presigned-url
-          RestApiId: !Ref PoCApiGatewayRestApi
+  PoCApiGatewayResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !GetAtt PoCApiGatewayRestApi.RootResourceId
+      PathPart: presigned-url
+      RestApiId: !Ref PoCApiGatewayRestApi
 
-      PoCApiGatewayMethod:
-        Type: AWS::ApiGateway::Method
-        Properties:
-          HttpMethod: GET
-          ResourceId: !Ref PoCApiGatewayResource
-          RestApiId: !Ref PoCApiGatewayRestApi
-          AuthorizationType: NONE # No authorization for simple PoC
-          Integration:
-            Type: AWS_PROXY
-            IntegrationHttpMethod: POST
-            Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PoCLambdaFunctionArn}/invocations"
-          RequestParameters:
-            method.request.querystring.key: true
-            method.request.querystring.action: false # Optional action
-            method.request.querystring.contentType: false # Optional contentType
+  PoCApiGatewayMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      HttpMethod: GET
+      ResourceId: !Ref PoCApiGatewayResource
+      RestApiId: !Ref PoCApiGatewayRestApi
+      AuthorizationType: NONE # No authorization for simple PoC
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PoCLambdaFunctionArn}/invocations"
+      RequestParameters:
+        method.request.querystring.key: true
+        method.request.querystring.action: false # Optional action
+        method.request.querystring.contentType: false # Optional contentType
 
-      PoCLambdaPermission:
-        Type: AWS::Lambda::Permission
-        Properties:
-          Action: lambda:InvokeFunction
-          FunctionName: !Ref PoCLambdaFunctionArn
-          Principal: apigateway.amazonaws.com
-          SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PoCApiGatewayRestApi.RestApiId}/*/*"
+  PoCLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref PoCLambdaFunctionArn
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PoCApiGatewayRestApi.RestApiId}/*/*"
 
-      PoCApiGatewayDeployment:
-        Type: AWS::ApiGateway::Deployment
-        DependsOn: PoCApiGatewayMethod
-        Properties:
-          RestApiId: !Ref PoCApiGatewayRestApi
-          Description: Initial PoC deployment.
+  PoCApiGatewayDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn: PoCApiGatewayMethod
+    Properties:
+      RestApiId: !Ref PoCApiGatewayRestApi
+      Description: Initial PoC deployment.
 
-      PoCApiGatewayStage:
-        Type: AWS::ApiGateway::Stage
-        Properties:
-          StageName: poc # PoC stage name
-          RestApiId: !Ref PoCApiGatewayRestApi
-          DeploymentId: !Ref PoCApiGatewayDeployment
+  PoCApiGatewayStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      StageName: poc # PoC stage name
+      RestApiId: !Ref PoCApiGatewayRestApi
+      DeploymentId: !Ref PoCApiGatewayDeployment
 
-      # CORS for PoC (allow all origins for easy testing)
-      PoCApiGatewayCorsMethodOptions:
-        Type: AWS::ApiGateway::Method
-        Properties:
-          HttpMethod: OPTIONS
-          ResourceId: !Ref PoCApiGatewayResource
-          RestApiId: !Ref PoCApiGatewayRestApi
-          AuthorizationType: NONE
-          Integration:
-            Type: MOCK
-            RequestTemplates:
-              application/json: "{\"statusCode\": 200}"
-            IntegrationResponses:
-              - StatusCode: 200
-                ResponseParameters:
-                  method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,content-type'"
-                  method.response.header.Access-Control-Allow-Methods: "'GET,PUT,OPTIONS'"
-                  method.response.header.Access-Control-Allow-Origin: "'*'" # Allowing all origins for simple PoC
-                ResponseTemplates:
-                  application/json: "null"
-                SelectionPattern: ""
-          MethodResponses:
-            - StatusCode: 200
-              ResponseParameters:
-                method.response.header.Access-Control-Allow-Headers: true
-                method.response.header.Access-Control-Allow-Methods: true
-                method.response.header.Access-Control-Allow-Origin: true
+  # CORS for PoC (allow all origins for easy testing)
+  PoCApiGatewayCorsMethodOptions:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      HttpMethod: OPTIONS
+      ResourceId: !Ref PoCApiGatewayResource
+      RestApiId: !Ref PoCApiGatewayRestApi
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: "{\"statusCode\": 200}"
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,content-type'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,PUT,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'" # Allowing all origins for simple PoC
+            ResponseTemplates:
+              application/json: "null"
+            SelectionPattern: ""
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
 
 Outputs:
   PoCApiGatewayInvokeUrl:

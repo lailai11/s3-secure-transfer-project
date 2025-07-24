@@ -1,0 +1,22 @@
+# Node modules (if used later)
+node_modules/
+
+# IDE/editor settings
+.vscode/
+.cursor/
+
+# OS-specific
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+*.zip
+*.log
+
+# AWS credentials or secrets (if added)
+*.env
+*.pem
+
+# Python cache (if you use any Python tooling later)
+__pycache__/
+*.pyc
