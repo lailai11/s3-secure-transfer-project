@@ -491,4 +491,190 @@
                     </button>
                 </div>
 
-                <div id="demo-output" class="mt-6 p-4 bg-gray-50 rounded-lg bor
+                <div id="demo-output" class="mt-6 p-4 bg-gray-50 rounded-lg border">
+                    <!-- Output will appear here -->
+                  </div>
+              </div>
+          </section>
+      </main>
+      <script>
+          // --- Workflow Animation Script ---
+          const steps = {
+              'request-upload': [
+                  {
+                      indicator: 'auth-backend-indicator',
+                      path: 'auth-backend-arrow',
+                      desc: 'User authenticates with Auth Service (e.g., CAC card).',
+                      descId: 'step-desc-0',
+                      color: '#6366f1',
+                  },
+                  {
+                      indicator: 'backend-s3-indicator-1',
+                      path: 'backend-s3-arrow-1',
+                      desc: 'Backend generates presigned upload URL.',
+                      descId: 'step-desc-1',
+                      color: '#ef4444',
+                  },
+                  {
+                      indicator: 'backend-s3-indicator-2',
+                      path: 'backend-s3-arrow-2',
+                      desc: 'Frontend uploads file to Incoming S3 using presigned URL.',
+                      descId: 'step-desc-2',
+                      color: '#10b981',
+                  },
+                  {
+                      indicator: 'incoming-processor-indicator',
+                      path: 'incoming-processor-arrow',
+                      desc: 'File Processor Lambda is triggered for integrity/security checks.',
+                      descId: 'step-desc-s3-process-trigger',
+                      color: '#6d28d9',
+                  },
+                  {
+                      indicator: 'processor-s3-indicator-trusted',
+                      path: 'processor-s3-arrow-trusted',
+                      desc: 'File passes checks and is moved to Trusted S3 Bucket.',
+                      descId: 'step-desc-4',
+                      color: '#10b981',
+                  },
+                  {
+                      indicator: 'processor-s3-indicator-quarantine',
+                      path: 'processor-s3-arrow-quarantine',
+                      desc: 'If file fails checks, it is moved to Quarantine S3 Bucket.',
+                      descId: 'step-desc-4',
+                      color: '#ef4444',
+                  },
+              ],
+              'direct-upload': [
+                  {
+                      indicator: 'backend-s3-indicator-1',
+                      path: 'backend-s3-arrow-1',
+                      desc: 'Backend generates presigned upload URL.',
+                      descId: 'step-desc-1',
+                      color: '#ef4444',
+                  },
+                  {
+                      indicator: 'backend-s3-indicator-2',
+                      path: 'backend-s3-arrow-2',
+                      desc: 'Frontend uploads file to Incoming S3 using presigned URL.',
+                      descId: 'step-desc-2',
+                      color: '#10b981',
+                  },
+                  {
+                      indicator: 'incoming-processor-indicator',
+                      path: 'incoming-processor-arrow',
+                      desc: 'File Processor Lambda is triggered for integrity/security checks.',
+                      descId: 'step-desc-s3-process-trigger',
+                      color: '#6d28d9',
+                  },
+                  {
+                      indicator: 'processor-s3-indicator-trusted',
+                      path: 'processor-s3-arrow-trusted',
+                      desc: 'File passes checks and is moved to Trusted S3 Bucket.',
+                      descId: 'step-desc-4',
+                      color: '#10b981',
+                  },
+                  {
+                      indicator: 'processor-s3-indicator-quarantine',
+                      path: 'processor-s3-arrow-quarantine',
+                      desc: 'If file fails checks, it is moved to Quarantine S3 Bucket.',
+                      descId: 'step-desc-4',
+                      color: '#ef4444',
+                  },
+              ],
+              'download': [
+                  {
+                      indicator: 'auth-backend-indicator',
+                      path: 'auth-backend-arrow',
+                      desc: 'User authenticates with Auth Service.',
+                      descId: 'step-desc-0',
+                      color: '#6366f1',
+                  },
+                  {
+                      indicator: 'backend-s3-indicator-1',
+                      path: 'backend-s3-arrow-1',
+                      desc: 'Backend generates presigned download URL.',
+                      descId: 'step-desc-1',
+                      color: '#ef4444',
+                  },
+                  {
+                      indicator: 'processor-s3-indicator-trusted',
+                      path: 'processor-s3-arrow-trusted',
+                      desc: 'Frontend downloads file from Trusted S3 using presigned URL.',
+                      descId: 'step-desc-4',
+                      color: '#10b981',
+                  },
+              ]
+          };
+  
+          function clearWorkflow() {
+              // Reset all indicators and paths
+              document.querySelectorAll('.data-indicator-vertical').forEach(el => {
+                  el.style.opacity = 0;
+                  el.style.top = '0';
+              });
+              document.querySelectorAll('.arrow-path-vertical').forEach(el => {
+                  el.classList.remove('active');
+                  el.style.backgroundColor = '#d1d5db';
+              });
+              // Clear all step descriptions
+              [
+                  'step-desc-0', 'step-desc-auth', 'step-desc-1', 'step-desc-2', 'step-desc-3',
+                  'step-desc-s3-process-trigger', 'step-desc-4'
+              ].forEach(id => {
+                  const el = document.getElementById(id);
+                  if (el) el.textContent = '';
+              });
+          }
+  
+          function animateWorkflow(type) {
+              clearWorkflow();
+              const workflow = steps[type];
+              let i = 0;
+              function nextStep() {
+                  if (i >= workflow.length) return;
+                  const step = workflow[i];
+                  // Highlight path
+                  const pathEl = document.getElementById(step.path);
+                  if (pathEl) {
+                      pathEl.classList.add('active');
+                      pathEl.style.backgroundColor = step.color;
+                  }
+                  // Animate indicator
+                  const indicatorEl = document.getElementById(step.indicator);
+                  if (indicatorEl) {
+                      indicatorEl.style.opacity = 1;
+                      indicatorEl.style.top = '60px';
+                      indicatorEl.style.backgroundColor = step.color;
+                      indicatorEl.classList.add('animate-pulse-once');
+                      setTimeout(() => {
+                          indicatorEl.style.opacity = 0;
+                          indicatorEl.style.top = '0';
+                          indicatorEl.classList.remove('animate-pulse-once');
+                      }, 700);
+                  }
+                  // Update step description
+                  const descEl = document.getElementById(step.descId);
+                  if (descEl) descEl.textContent = step.desc;
+                  i++;
+                  if (i < workflow.length) {
+                      setTimeout(nextStep, 900);
+                  }
+              }
+              nextStep();
+          }
+  
+          document.getElementById('start-request-upload-animation').onclick = function() {
+              animateWorkflow('request-upload');
+          };
+          document.getElementById('start-direct-upload-animation').onclick = function() {
+              animateWorkflow('direct-upload');
+          };
+          document.getElementById('start-download-animation').onclick = function() {
+              animateWorkflow('download');
+          };
+          document.getElementById('reset-animation').onclick = function() {
+              clearWorkflow();
+          };
+      </script>
+  </body>
+  </html>
